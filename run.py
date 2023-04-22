@@ -1,64 +1,29 @@
-import cv2
-import argparse
-import os
-# import numpy as np
+import sys
 from common.logging import configure_logger
-from metrics.metrics import cosine_similarity_metric, hamming_distance_metric,\
-    mse_metric, psnr_metric, ssim_metric
-
+from common.utils import check_args, create_data_dirs, get_imgs, parse_args
+from metrics.metrics import run_metrics
 logger = configure_logger(__name__)
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Simple model evaluation pipeline")
-    parser.add_argument(
-        '--first', type=str, default='data/images/pred1.png',
-        help='path to input image1')
-    parser.add_argument(
-        '--second', type=str, default='data/images/real1.png',
-        help='path to input image2')
-    args = parser.parse_args()
-
-    return args
-
-
-def model(input):
-    return input
-
-
-def run_metrics(img1, img2):
-    mse_res = mse_metric(img1, img2)
-    logger.info(f'MSE: {mse_res}')
-    ssim_res = ssim_metric(img1, img2)
-    logger.info(f'SSIM (not verified): {ssim_res}')
-    psnr_res = psnr_metric(img1, img2)
-    logger.info(f'PSNR : {psnr_res}')
-    hdm_res = hamming_distance_metric(img1, img2)
-    logger.info(f'HDM: {hdm_res}')
-    csm_res = cosine_similarity_metric(img1, img2)
-    logger.info(f'CSM: {csm_res}')
 
 
 def main(args):
 
-    img1 = cv2.imread(args.first)
-    img2 = cv2.imread(args.second)
+    exp_dir = create_data_dirs(args)
 
-    if img1.shape != img2.shape:
-        logger.warning(
-            'Image shapes are different! Scaling img2 to img1 shape...')
-        img2 = cv2.resize(
-            img2, (img1.shape[1], img1.shape[0]), interpolation=cv2.INTER_AREA)
+    if not check_args(args):
+        sys.exit('Incorrect args!\n Exiting...')
 
-    if not os.path.exists('data/out'):
-        os.makedirs('data/out', exist_ok=True)
+    images = get_imgs(args)
 
-    run_metrics(img1, img2)
+    # images = scale_imgs(images)
+
+    # result_image = model(image1, image2)
+
+    for index, image_pair in enumerate(images):
+        run_metrics(*image_pair, exp_dir, index)
 
 
 if __name__ == '__main__':
-    logger.debug('Running...')
+    logger.info('Starting...')
 
     args = parse_args()
     main(args)

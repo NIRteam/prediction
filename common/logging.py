@@ -4,18 +4,20 @@ import os
 
 
 def configure_logger(name):
+    logs_dir = 'logs/'
     module_name = name.strip('_')
     logger = logging.getLogger(module_name)
     logger.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter(
-        "%(name)s | %(asctime)s | %(levelname)s | %(message)s")
+        "%(name)s | %(asctime)s | %(filename)s:%(lineno)d | %(levelname)s |"
+        " %(message)s"
+        )
 
-    if not os.path.exists('data/logs/'):
-        os.makedirs('data/logs/', exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
 
     file_handler = logging.FileHandler(
-        f"data/logs/{module_name}.log", mode='w')
+        f"{logs_dir}{module_name}.log", mode='w')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

@@ -3,6 +3,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from skimage.metrics import structural_similarity
 import cv2
 import math
+from common.utils import write_result
+from common.logging import configure_logger
+logger = configure_logger(__name__)
 
 
 def cosine_similarity_metric(image1, image2):
@@ -53,3 +56,24 @@ def ssim_metric(image1, image2):
     (score, diff) = structural_similarity(image1, image2, full=True)
 
     return score
+
+
+def run_metrics(img1, img2, exp_dir, exp_no):
+    out_file_path = f'{exp_dir}/metrics.txt'
+    with open(out_file_path, 'a') as out_file:
+        write_result(f'Run #{exp_no}', logger, out_file)
+
+        mse_res = mse_metric(img1, img2)
+        write_result(f'MSE: {mse_res}', logger, out_file)
+
+        ssim_res = ssim_metric(img1, img2)
+        write_result(f'SSIM (not verified): {ssim_res}', logger, out_file)
+
+        psnr_res = psnr_metric(img1, img2)
+        write_result(f'PSNR: {psnr_res}', logger, out_file)
+
+        hdm_res = hamming_distance_metric(img1, img2)
+        write_result(f'HDM: {hdm_res}', logger, out_file)
+
+        csm_res = cosine_similarity_metric(img1, img2)
+        write_result(f'CSM: {csm_res}', logger, out_file)
