@@ -5,6 +5,8 @@ import cv2
 import math
 from common.utils import write_result
 from common.logging import configure_logger
+from scipy.spatial.distance import hamming
+
 logger = configure_logger(__name__)
 
 
@@ -23,11 +25,7 @@ def hamming_distance_metric(image1, image2):
     image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
-    image1_binary = cv2.threshold(image1, 127, 255, cv2.THRESH_BINARY)[1]
-    image2_binary = cv2.threshold(image2, 127, 255, cv2.THRESH_BINARY)[1]
-
-    difference = cv2.bitwise_xor(image1_binary, image2_binary)
-    hamming_distance = cv2.countNonZero(difference)
+    hamming_distance = hamming(image1.flatten(), image2.flatten())
 
     return hamming_distance
 
@@ -53,7 +51,8 @@ def ssim_metric(image1, image2):
     image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
-    (score, diff) = structural_similarity(image1, image2, full=True)
+    score = structural_similarity(
+        image1, image2, data_range=(image2.max() - image2.min()))
 
     return score
 

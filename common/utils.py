@@ -9,10 +9,22 @@ logger = configure_logger(__name__)
 
 
 def create_data_dirs(args):
+    """По этому поводу хотел обсудить со всеми:
+    1.Проверять папку output смысла нет, ее можно создать при первом запуске
+    2.Есть вариант что пользователь хочет закинуть какой-то конкретный инпут в 
+    прогу (пока у нас нет настоящего инпута). У нас есть 2 варианта как это 
+    обеспечить 
+    сделать ему интерфейс который заставит его перемещать файлы в папку, 
+    либо вводить инпут аргументом, имхо аргумент логичнее, в таком случае 
+    наличие 
+    папки input не обязательно"""
     if args.clean:
         shutil.rmtree('data/output')
     os.makedirs('data/output', exist_ok=True)
-    os.makedirs('data/input', exist_ok=True)
+    if not os.path.exists('data/input'):
+        os.makedirs('data/input', exist_ok=True)
+        sys.exit('Необходимые директории отсутствуют!\n'
+                 'Создана директория data/input')
     exp_dir = create_exp_dir()
     return exp_dir
 
@@ -65,10 +77,6 @@ def parse_args():
     args = parser.parse_args()
 
     return args
-
-
-def model(input):
-    return input
 
 
 def create_exp_dir():
