@@ -51,7 +51,7 @@ class Model():
             
             return pred
 
-    def pred(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray]:
+    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray]:
         """
         imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
         num_frames_to_predict : int - количество кадров, которое нужно предсказать
@@ -60,13 +60,13 @@ class Model():
         imgs = list(deepcopy(imgs)) ### do not modify the input list
 
         if num_frames_to_predict == 1:
-            return model.evaluate(imgs)
+            return self.evaluate(imgs)
 
         # how many frames are passed to model
         frames_to_model = len(imgs)
 
         for i in range(num_frames_to_predict):
-            img_pred = model.evaluate(imgs[-frames_to_model:])
+            img_pred = self.evaluate(imgs[-frames_to_model:])
             imgs.append(img_pred)
 
         return imgs
@@ -146,7 +146,7 @@ class Model():
                     else: # predict next frame
                         predicted_frames_num += 1
                         
-                        img_pred = model.pred(frames[-frames_to_model:])
+                        img_pred = self.predict(frames[-frames_to_model:])
                         writer.write(img_pred)
                         frames.append(img_pred)
                         real_fake_mask.append("fake")
