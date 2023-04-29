@@ -37,7 +37,7 @@ class Model():
 
             try:
                 pred = self.dmvfn(img, scale=scale_list, training=False) # 1CHW
-            except Exception:
+            except RuntimeError:
                 print(traceback.format_exc())
                 raise RuntimeError("Image resolution is not compatible")
 
@@ -72,9 +72,10 @@ class Model():
         return imgs
 
 
-    def predictVideo(self, video_path : str, save_path : str,
+    def predictVideo(self, video_path : str | Path, save_path : str | Path | None,
                      real : int = 1, fake : int = 1, frames_to_model : int = 2,
-                     w : int = 1024, h : int = 1792,):
+                     #  frames_to_predict : int = 1, frames_to_model : int = 2,
+                    w : int = 1024, h : int = 1792, return_values = True,):
         """
         video_path : str - Путь до видео, фреймы в котором надо предсказать
         save_path : str or None - Куда сохранить новое видео, если None, то видео сохраняться не будет
@@ -89,26 +90,30 @@ class Model():
         real_fake_mask : list[str] - маска для frames, где реальные кадры отмечены "real", предсказанные кадры "fake"
 
         Примеры использования:
-        >>> frames, mask = predictVideo("path/to/video", "where/to/save", real = 2, fake = 1, frames_to_model = 2)
+        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 1, frames_to_model = 2)
         >>> mask
         ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
-        >> len(mask) / mask.count("real") # 
 
-        >>> frames, mask = predictVideo("path/to/video", "where/to/save", real = 1, fake = 1, frames_to_model = 2)
+        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 1, fake = 1, frames_to_model = 2)
         >>> mask
         ["real", "real", "fake", "real",  "fake", "real", "fake", ...]
 
-        >>> frames, mask = predictVideo("path/to/video", "where/to/save", real = 2, fake = 2, frames_to_model = 4)
+        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 2, frames_to_model = 4)
         >>> mask
         ["real", "real", "real", "real", "fake", "fake", "real", "real", "fake", "fake", "real", "real", ...]
         """
+
+        if save_path:
+            save_path = str(save_path)
+        video_path = str(video_path)
         
         cap = cv2.VideoCapture(video_path)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        writer = cv2.VideoWriter(save_path, fourcc, fps, (h, w))
+        if save_path:
+            fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+            writer = cv2.VideoWriter(save_path, fourcc, fps, (h, w))
 
         frames : list[np.ndarray] = []
         real_fake_mask : list[str] = []
@@ -119,10 +124,10 @@ class Model():
                 frame = cv2.resize(frame, (h, w))
                 frames.append(frame)
                 real_fake_mask.append("real")
-                writer.write(frame)
+                if save_path: writer.write(frame)
             else:
                 cap.release()
-                writer.release()
+                if save_path: writer.release()
                 raise RuntimeError("Ошибка считывания видео")
 
         predicted_frames_num = 0
@@ -139,7 +144,7 @@ class Model():
 
                         frames.append(frame)
                         real_fake_mask.append("real")
-                        writer.write(frame)
+                        if save_path: writer.write(frame)
                         if predicted_frames_num >= (fake + real):
                             predicted_frames_num = 0
                     
@@ -147,9 +152,9 @@ class Model():
                         predicted_frames_num += 1
                         
                         img_pred = self.predict(frames[-frames_to_model:])
-                        writer.write(img_pred)
                         frames.append(img_pred)
                         real_fake_mask.append("fake")
+                        if save_path: writer.write(img_pred)
 
                 else:
                     break
@@ -157,10 +162,9 @@ class Model():
         except Exception:
             print(traceback.format_exc())
 
-        finally: # Закрываем файлы
+        finally: # Желательно всегда закрывать их
             cap.release()
-            writer.release()
+            if save_path: writer.release()
 
-        return frames, real_fake_mask
-
-
+        if return_values:
+            return frames, real_fake_mask
