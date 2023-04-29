@@ -1,7 +1,12 @@
 import torch
 import cv2
-# from tqdm.notebook import tqdm
-from tqdm import tqdm
+
+try: # in ipython
+    get_ipython()
+    from tqdm.notebook import tqdm
+except NameError: # regular python 
+    from tqdm import tqdm
+
 import numpy as np
 
 import traceback
