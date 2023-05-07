@@ -124,7 +124,24 @@ class VPvI: # Video Prediction via Interpolation
         # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
         # interp_result, flow_2to3_pred, warp_pred = mid, flow[-1][:,2:,...], warp_pred
 
-        ### TODO работа данного алгоритма не имеет смысла, стоит ещё разобраться в этом
+
+        ### TODO Попробовать этот код
+        # frame_pred_before = resample(im2.detach().float(), flow.float())
+
+        # im2_vis = im2.detach().cpu().numpy()
+        # flow_ = flow.detach().cpu().numpy()
+        
+        # bwd_mask_ = 1 - bwd_mask.detach().cpu().numpy().astype(np.uint8)
+        # kernel = np.ones((5, 5), np.uint8)
+        # bwd_mask_x = cv2.dilate(bwd_mask_[0,0,...], kernel, iterations=1)
+        # bwd_mask_y = cv2.dilate(bwd_mask_[0,1,...], kernel, iterations=1)
+        # flow_x = regionfill(flow_[0,0,...], bwd_mask_x.astype(int))
+        # flow_y = regionfill(flow_[0,1,...], bwd_mask_y.astype(int))
+        # flow_new = np.concatenate([flow_x[None,None,...], flow_y[None,None,...]], axis=1)
+        # flow_new = torch.from_numpy(flow_new).cuda()
+
+        # frame_pred = resample(im2.detach().float(), flow_new.float())
+
         pred = frame_pred
         
         pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
