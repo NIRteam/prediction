@@ -113,18 +113,19 @@ class VPvI: # Video Prediction via Interpolation
 
         frame_pred = resample(im2, flow)
 
-        imgs = torch.cat((im1, frame_pred), 1)
+        # imgs = torch.cat((im1, frame_pred), 1)
 
-        flow, mask, merged, merged_final = self.model(imgs, [4, 2, 1])
+        # flow, mask, merged, merged_final = self.model(imgs, [4, 2, 1])
 
-        mid = merged_final[2]
-        mid = torch.clamp(mid, 0.0, 1.0)
+        # mid = merged_final[2]
+        # mid = torch.clamp(mid, 0.0, 1.0)
 
-        warp_pred = merged[2][1]
-        warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
-        interp_result, flow_2to3_pred, warp_pred = mid, flow[-1][:,2:,...], warp_pred
+        # warp_pred = merged[2][1]
+        # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
+        # interp_result, flow_2to3_pred, warp_pred = mid, flow[-1][:,2:,...], warp_pred
 
-        pred = warp_pred
+        ### TODO работа данного алгоритма не имеет смысла, стоит ещё разобраться в этом
+        pred = frame_pred
         
         pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
         pred = pred.astype("uint8")
