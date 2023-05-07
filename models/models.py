@@ -1,5 +1,11 @@
 import torch
 import cv2
+import numpy as np
+
+import traceback
+import os
+from copy import deepcopy
+from pathlib import Path
 
 try: # in ipython
     get_ipython()
@@ -7,13 +13,6 @@ try: # in ipython
 except NameError: # regular python 
     from tqdm import tqdm
 
-import numpy as np
-
-import traceback
-import os
-from copy import deepcopy
-
-from pathlib import Path
 
 from .DMVFN import DMVFN as DMVFN_model
 from .VPvI import IFNet, resample
@@ -22,10 +21,10 @@ from .RAFT import RAFT
 from .utils import convertModuleNames
 from .utils import fwd2bwd
 
+
 ### TODO add full support for cpu
 
-
-class DMVFN:
+class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
     def __init__(self, load_path, device="cuda"):
         self.device = device
         self.dmvfn = DMVFN_model()
@@ -66,7 +65,7 @@ class DMVFN:
         return pred
 
 
-class VPvI:
+class VPvI: # Video Prediction via Interpolation
     def __init__(self, model_load_path = "VPvVFI/train_log/flownet.pkl", flownet_load_path = "RAFT/pretrained_models/raft-kitti.pth", device="cuda"):
         self.device = device
         self.model = IFNet()
@@ -124,7 +123,7 @@ class VPvI:
         warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
         interp_result, flow_2to3_pred, warp_pred = mid, flow[-1][:,2:,...], warp_pred
 
-        pred = frame_pred
+        pred = warp_pred
         
         pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
         pred = pred.astype("uint8")
@@ -132,15 +131,16 @@ class VPvI:
         return pred
 
 
-class Model():
+class Model:
+    """
+    model = Model(DMVFN(load_path = "./pretrained_models/dmvfn_city.pkl"))
+    
+    model = Model(
+                VPvI(model_load_path = "./pretrained_models/flownet.pkl",
+                     flownet_load_path = "./pretrained_models/raft-kitti.pth"))
+    """
+
     def __init__(self, model : DMVFN | VPvI):
-        """
-        model = Model(DMVFN(load_path = "./pretrained_models/dmvfn_city.pkl"))
-        
-        model = Model(
-                    VPvI(model_load_path = "./pretrained_models/flownet.pkl",
-                         flownet_load_path = "./pretrained_models/raft-kitti.pth"))
-        """
         self.model = model
         self.device = self.model.device
 
@@ -166,15 +166,21 @@ class Model():
         return imgs[frames_to_model:]
 
 
-    def predictVideo(self, video_path : str | Path, save_path : str | Path | None,
-                     real : int = 1, fake : int = 1, frames_to_model : int = 2,
-                     #  frames_to_predict : int = 1, frames_to_model : int = 2,
-                     w : int = 1024, h : int = 1792, return_values = True,):
+    def predictVideo(self,
+                     video_path : str | Path,
+                     save_path : str | Path | None,
+                     real_fake_pattern : list[str] = [],
+                     real : int = 1,
+                     fake : int = 1,
+                     frames_to_model : int = 2,
+                     w : int = 1024,
+                     h : int = 1792,):
         """
         video_path : str - Путь до видео, фреймы в котором надо предсказать
         save_path : str or None - Куда сохранить новое видео, если None, то видео сохраняться не будет
-        real : int - Количество кадров, которые считываются с реалього видео
-        fake : int - Количество кадров, которые будут предсказаны
+        real_fake_pattern : list[str] - Паттерн, который указывает какие кадры должны быть предсказаны, паттерн должен желательно начинаться с "fake"
+        real : int - Количество кадров в паттерне, которые считываются с реалього видео, не учитывается при передаче real_fake_pattern
+        fake : int - Количество кадров в паттерне, которые будут предсказаны, не учитывается при передаче real_fake_pattern
         frames_to_model : int - Сколько кадров передаётся в модель для предсказания
         w : int - Ширина видео
         h : int - Высота видео
@@ -195,7 +201,16 @@ class Model():
         >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 2, frames_to_model = 4)
         >>> mask
         ["real", "real", "real", "real", "fake", "fake", "real", "real", "fake", "fake", "real", "real", ...]
+
+        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real_fake_pattern = ["fake", "real", "real"] frames_to_model = 2)
+        >>> mask
+        ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
         """
+
+        if not real_fake_pattern:
+            real_fake_pattern = ["fake"] * fake + ["real"] * real
+        
+        pattern_len = len(real_fake_pattern)
 
         if save_path:
             save_path = str(save_path)
@@ -222,9 +237,7 @@ class Model():
             else:
                 cap.release()
                 if save_path: writer.release()
-                raise RuntimeError("Ошибка считывания видео")
-
-        predicted_frames_num = 0
+                raise RuntimeError(f"Unable to read video {video_path = }")
 
         try:
             for i in tqdm(range(frame_count-frames_to_model)):
@@ -233,18 +246,12 @@ class Model():
                 if ret:
                     frame = cv2.resize(frame, (h, w))
                     
-                    if predicted_frames_num >= fake: # read real frame
-                        predicted_frames_num += 1
-
+                    if real_fake_pattern[i % pattern_len] == "real": # read real frame
                         frames.append(frame)
                         real_fake_mask.append("real")
                         if save_path: writer.write(frame)
-                        if predicted_frames_num >= (fake + real):
-                            predicted_frames_num = 0
-                    
-                    else: # predict next frame
-                        predicted_frames_num += 1
                         
+                    else: # predict next frame
                         img_pred = self.predict(frames[-frames_to_model:])
                         frames.append(img_pred)
                         real_fake_mask.append("fake")
@@ -261,5 +268,5 @@ class Model():
             cap.release()
             if save_path: writer.release()
 
-        if return_values:
-            return frames, real_fake_mask
+        # if return_values:
+        return frames, real_fake_mask
