@@ -101,7 +101,7 @@ class VPvI:
         _, flow = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
 
         flow = -flow.detach().cpu().numpy()
-        
+
         flow = fwd2bwd(flow)
 
         flow = torch.from_numpy(flow).cuda().float()
@@ -142,7 +142,7 @@ class Model():
                          flownet_load_path = "./pretrained_models/raft-kitti.pth"))
         """
         self.model = model
-        self.device = model.device
+        self.device = self.model.device
 
 
     def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray] | np.ndarray:
@@ -154,13 +154,13 @@ class Model():
         imgs = list(deepcopy(imgs)) ### do not modify the input list
 
         if num_frames_to_predict == 1:
-            return model.evaluate(imgs)
+            return self.model.evaluate(imgs)
 
         # how many frames are passed to model
         frames_to_model = len(imgs)
 
         for i in range(num_frames_to_predict):
-            img_pred = model.evaluate(imgs[-frames_to_model:])
+            img_pred = self.model.evaluate(imgs[-frames_to_model:])
             imgs.append(img_pred)
 
         return imgs[frames_to_model:]
@@ -256,7 +256,8 @@ class Model():
         except Exception:
             print(traceback.format_exc())
 
-        finally: # Желательно всегда закрывать их
+        # Всегда закрываем файлы, даже в случае неридвиденных ошибок, например CUDA out of memory
+        finally:
             cap.release()
             if save_path: writer.release()
 
