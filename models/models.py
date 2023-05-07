@@ -84,7 +84,7 @@ class VPvI: # Video Prediction via Interpolation
         args.mixed_precision = True
         args.alternate_corr = False
 
-        self.flowNet = nn.DataParallel(RAFT(args))
+        self.flowNet = torch.nn.DataParallel(RAFT(args))
         self.flowNet.load_state_dict(torch.load(flownet_load_path, map_location ='cpu'))
 
         self.flowNet = self.flowNet.module
