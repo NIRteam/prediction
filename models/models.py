@@ -22,6 +22,8 @@ from .RAFT import RAFT
 from .utils import convertModuleNames
 from .utils import fwd2bwd
 
+### TODO add full support for cpu
+
 
 class DMVFN:
     def __init__(self, load_path, device="cuda"):
@@ -139,8 +141,8 @@ class Model():
                     VPvI(model_load_path = "./pretrained_models/flownet.pkl",
                          flownet_load_path = "./pretrained_models/raft-kitti.pth"))
         """
-        self.device = device
         self.model = model
+        self.device = model.device
 
 
     def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray] | np.ndarray:
