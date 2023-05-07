@@ -15,50 +15,134 @@ from copy import deepcopy
 
 from pathlib import Path
 
-from DMVFN.model.arch import *
+from .DMVFN import DMVFN as DMVFN_model
+from .VPvI import IFNet, resample
+from .RAFT import RAFT
+
+from .utils.utils import convertModuleNames
+
+
+class DMVFN:
+    def __init__(self, load_path, device="cuda"):
+        self.device = device
+        self.dmvfn = DMVFN_model()
+        self.dmvfn.to(self.device)
+
+        # load model
+        state_dict = torch.load(load_path)
+        model_state_dict = self.dmvfn.state_dict()
+        
+        for k in model_state_dict.keys():
+            model_state_dict[k] = state_dict['module.' + k]
+
+        self.dmvfn.load_state_dict(model_state_dict)
+
+    @torch.no_grad()
+    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,4,4,2,2,2,1,1,1]):
+        for i in range(len(imgs)):
+            imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32'))
+        
+        img = torch.cat(imgs, dim=0)
+        img = img.unsqueeze(0) # .unsqueeze(0) # NCHW
+        img = img.to(self.device, non_blocking=True) / 255.
+
+        try:
+            pred = self.dmvfn(img, scale=scale_list, training=False) # 1CHW
+        except RuntimeError:
+            print(traceback.format_exc())
+            raise RuntimeError("Image resolution is not compatible")
+
+        if len(pred) == 0:
+            pred = imgs[:, 0]
+        else:
+            pred = pred[-1]
+        
+        pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
+        pred = pred.astype("uint8")
+        
+        return pred
+
+
+class VPvI:
+    def __init__(self, model_load_path = "VPvVFI/train_log/flownet.pkl", flownet_load_path = "RAFT/pretrained_models/raft-kitti.pth", device="cuda"):
+        self.device = device
+        self.model = IFNet()
+        self.model.to(device)
+
+        if torch.cuda.is_available():
+            self.model.load_state_dict(convertModuleNames(torch.load(model_load_path)))
+        else:
+            self.model.load_state_dict(convertModuleNames(torch.load(model_load_path, map_location ='cpu')))
+
+        # Emulate arguments for RAFT
+        args = argparse.Namespace()
+        args.model = Path(flownet_load_path)
+        args.small = False
+        args.mixed_precision = True
+        args.alternate_corr = False
+
+        self.flowNet = nn.DataParallel(RAFT(args))
+        self.flowNet.load_state_dict(torch.load(flownet_load_path, map_location ='cpu'))
+
+        self.flowNet = self.flowNet.module
+
+
+    @torch.no_grad()
+    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,2,1]):
+        assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
+
+        # HWC -> CHW
+        im1 = torch.tensor(imgs[0].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
+        im2 = torch.tensor(imgs[1].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
+
+        _, flow = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
+
+        flow = -flow.detach().cpu().numpy()
+        
+        flow = fwd2bwd(flow)
+
+        flow = torch.from_numpy(flow).cuda().float()
+
+        # bwd_flow_3to2 = flow_up.clone().float()
+        # flow = flow_up.clone().float()
+
+        # flow = Variable(bwd_flow_3to2, requires_grad=True)
+
+        frame_pred = resample(im2, flow)
+
+        imgs = torch.cat((im1, frame_pred), 1)
+
+        flow, mask, merged, merged_final = self.model(imgs, [4, 2, 1])
+
+        mid = merged_final[2]
+        mid = torch.clamp(mid, 0.0, 1.0)
+
+        warp_pred = merged[2][1]
+        warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
+        interp_result, flow_2to3_pred, warp_pred = mid, flow[-1][:,2:,...], warp_pred
+
+        pred = frame_pred
+        
+        pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
+        pred = pred.astype("uint8")
+        
+        return pred
 
 
 class Model():
-    def __init__(self, load_path, device="cuda"):
+    def __init__(self, model : DMVFN | VPvI):
+        """
+        model = Model(DMVFN(load_path = "./pretrained_models/dmvfn_city.pkl"))
+        
+        model = Model(
+                    VPvI(model_load_path = "./pretrained_models/flownet.pkl",
+                         flownet_load_path = "./pretrained_models/raft-kitti.pth"))
+        """
         self.device = device
-        self.dmvfn = DMVFN()
-        self.dmvfn.to(device)
+        self.model = model
 
-        state_dict = torch.load(load_path)
-        model_state_dict = self.dmvfn.state_dict()
-        for k in model_state_dict.keys():
-            model_state_dict[k] = state_dict['module.'+k]
-        self.dmvfn.load_state_dict(model_state_dict)
 
-    def eval(self):
-        self.dmvfn.eval()
-
-    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,4,4,2,2,2,1,1,1]):
-        with torch.no_grad():
-            for i in range(len(imgs)):
-                imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32'))
-            
-            img = torch.cat(imgs, dim=0)
-            img = img.unsqueeze(0) # .unsqueeze(0) # NCHW
-            img = img.to(self.device, non_blocking=True) / 255.
-
-            try:
-                pred = self.dmvfn(img, scale=scale_list, training=False) # 1CHW
-            except RuntimeError:
-                print(traceback.format_exc())
-                raise RuntimeError("Image resolution is not compatible")
-
-            if len(pred) == 0:
-                pred = imgs[:, 0]
-            else:
-                pred = pred[-1]
-            
-            pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
-            pred = pred.astype("uint8")
-            
-            return pred
-
-    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray]:
+    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray] | np.ndarray:
         """
         imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
         num_frames_to_predict : int - количество кадров, которое нужно предсказать
@@ -67,22 +151,22 @@ class Model():
         imgs = list(deepcopy(imgs)) ### do not modify the input list
 
         if num_frames_to_predict == 1:
-            return self.evaluate(imgs)
+            return model.evaluate(imgs)
 
         # how many frames are passed to model
         frames_to_model = len(imgs)
 
         for i in range(num_frames_to_predict):
-            img_pred = self.evaluate(imgs[-frames_to_model:])
+            img_pred = model.evaluate(imgs[-frames_to_model:])
             imgs.append(img_pred)
 
-        return imgs
+        return imgs[frames_to_model:]
 
 
     def predictVideo(self, video_path : str | Path, save_path : str | Path | None,
                      real : int = 1, fake : int = 1, frames_to_model : int = 2,
                      #  frames_to_predict : int = 1, frames_to_model : int = 2,
-                    w : int = 1024, h : int = 1792, return_values = True,):
+                     w : int = 1024, h : int = 1792, return_values = True,):
         """
         video_path : str - Путь до видео, фреймы в котором надо предсказать
         save_path : str or None - Куда сохранить новое видео, если None, то видео сохраняться не будет
