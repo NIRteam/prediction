@@ -1,1 +1,3 @@
-from models import *
+from .models import Model, VPvI, DMVFN
+
+# from . import model

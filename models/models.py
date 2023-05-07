@@ -19,7 +19,8 @@ from .DMVFN import DMVFN as DMVFN_model
 from .VPvI import IFNet, resample
 from .RAFT import RAFT
 
-from .utils.utils import convertModuleNames
+from .utils import convertModuleNames
+from .utils import fwd2bwd
 
 
 class DMVFN:
