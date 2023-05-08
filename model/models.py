@@ -42,7 +42,9 @@ class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
 
     @torch.no_grad()
     def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,4,4,2,2,2,1,1,1]):
+        
         for i in range(len(imgs)):
+            # HWC (height width channel) -> CHW (channel height width)
             imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32'))
         
         img = torch.cat(imgs, dim=0)
@@ -52,9 +54,11 @@ class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
         try:
             pred = self.dmvfn(img, scale=scale_list, training=False) # 1CHW
         except RuntimeError:
+            ### TODO Нужно точно определить какое разрешение принимает модель
             print(traceback.format_exc())
             raise RuntimeError("Image resolution is not compatible")
 
+        # если модель ничего не возвращает, то возращаем последний фрейм
         if len(pred) == 0:
             pred = imgs[:, 0]
         else:
@@ -67,16 +71,18 @@ class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
 
 
 class VPvI: # Video Prediction via Interpolation
-    def __init__(self, model_load_path = "VPvVFI/train_log/flownet.pkl", flownet_load_path = "RAFT/pretrained_models/raft-kitti.pth", device="cuda"):
+    def __init__(self, model_load_path = "model/pretrained_models/IFNet.pkl", flownet_load_path = "model/pretrained_models/raft-kitti.pth", device="cuda"):
         self.device = device
         self.model = IFNet()
         self.model.to(device)
 
+        # load IFNet
         if torch.cuda.is_available():
             self.model.load_state_dict(convertModuleNames(torch.load(model_load_path)))
         else:
             self.model.load_state_dict(convertModuleNames(torch.load(model_load_path, map_location ='cpu')))
 
+        # load FlowNet
         # Emulate arguments for RAFT
         args = argparse.Namespace()
         args.model = Path(flownet_load_path)
@@ -91,31 +97,37 @@ class VPvI: # Video Prediction via Interpolation
 
 
     @torch.no_grad()
-    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,2,1]):
+    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,2,1]) -> np.ndarray:
+
         assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
 
         # HWC -> CHW
         im1 = torch.tensor(imgs[0].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
         im2 = torch.tensor(imgs[1].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
 
+        # RAFT accepts images in [0, 255]
         _, flow = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
 
+        # turn forward flow to backword flow
         flow = -flow.detach().cpu().numpy()
 
         flow = fwd2bwd(flow)
 
         flow = torch.from_numpy(flow).cuda().float()
 
-        # bwd_flow_3to2 = flow_up.clone().float()
+        ## another way of turning flow (flow * -1), did not work in my test
         # flow = flow_up.clone().float()
 
         # flow = Variable(bwd_flow_3to2, requires_grad=True)
 
+        # aplly flow
         frame_pred = resample(im2, flow)
 
+
+        ## this code is only for interpolation
         # imgs = torch.cat((im1, frame_pred), 1)
 
-        # flow, mask, merged, merged_final = self.model(imgs, [4, 2, 1])
+        # flow, mask, merged, merged_final = self.model(imgs, scale_list)
 
         # mid = merged_final[2]
         # mid = torch.clamp(mid, 0.0, 1.0)
@@ -166,8 +178,25 @@ class Model:
 
     def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray] | np.ndarray:
         """
-        imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
-        num_frames_to_predict : int - количество кадров, которое нужно предсказать
+        args:
+            imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
+            num_frames_to_predict : int - количество кадров, которое нужно предсказать
+        
+        returns:
+            img : np.ndarray - Предсказанный фрейм если num_frames_to_predict = 1
+            imgs : np.ndarray | list[np.ndarray] - Предсказанные фреймы или один фрейм, если num_frames_to_predict = 1
+
+        examples:
+            >>> img1, img2 = cv2.imread("1.jpg"), cv2.imread("2.jpg")
+            >>> img1, img2 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB), cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+            >>> img1, img2 = cv2.resize(img1, (1024, 512)), cv2.resize(img2, (1024, 512))
+            >>> pred = model.predict([img1, img2])
+            >>> pred.shape
+            (512, 1024, 3)
+
+            >>> pred = model.predict([img1, img2], 10)
+            >>> len(pred)
+            10
         """
 
         imgs = list(deepcopy(imgs)) ### do not modify the input list
@@ -182,6 +211,7 @@ class Model:
             img_pred = self.model.evaluate(imgs[-frames_to_model:])
             imgs.append(img_pred)
 
+        # do not return input frames
         return imgs[frames_to_model:]
 
 
@@ -195,35 +225,41 @@ class Model:
                      w : int = 1024,
                      h : int = 1792,):
         """
-        video_path : str - Путь до видео, фреймы в котором надо предсказать
-        save_path : str or None - Куда сохранить новое видео, если None, то видео сохраняться не будет
-        real_fake_pattern : list[str] - Паттерн, который указывает какие кадры должны быть предсказаны, паттерн должен желательно начинаться с "fake"
-        real : int - Количество кадров в паттерне, которые считываются с реалього видео, не учитывается при передаче real_fake_pattern
-        fake : int - Количество кадров в паттерне, которые будут предсказаны, не учитывается при передаче real_fake_pattern
-        frames_to_model : int - Сколько кадров передаётся в модель для предсказания
-        w : int - Ширина видео
-        h : int - Высота видео
+        args:
+            video_path : str - Путь до видео, фреймы в котором надо предсказать
+            save_path : str or None - Куда сохранить новое видео, если None, то видео сохраняться не будет
+            real_fake_pattern : list[str] - Паттерн, который указывает какие кадры должны быть предсказаны, паттерн должен желательно начинаться с "fake"
+            real : int - Количество кадров в паттерне, которые считываются с реалього видео, не учитывается при передаче real_fake_pattern
+            fake : int - Количество кадров в паттерне, которые будут предсказаны, не учитывается при передаче real_fake_pattern
+            frames_to_model : int - Сколько кадров передаётся в модель для предсказания
+            w : int - Ширина видео
+            h : int - Высота видео
 
         returns:
-        frames : list[np.array] - все кадры видео
-        real_fake_mask : list[str] - маска для frames, где реальные кадры отмечены "real", предсказанные кадры "fake"
+            frames : list[np.array] - все кадры видео
+            real_fake_mask : list[str] - маска для frames, где реальные кадры отмечены "real", предсказанные кадры "fake"
 
-        Примеры использования:
-        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 1, frames_to_model = 2)
-        >>> mask
-        ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
+        examples:
+            >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 1, frames_to_model = 2)
+            >>> mask
+            ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
 
-        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 1, fake = 1, frames_to_model = 2)
-        >>> mask
-        ["real", "real", "fake", "real",  "fake", "real", "fake", ...]
+            >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 1, fake = 1, frames_to_model = 2)
+            >>> mask
+            ["real", "real", "fake", "real",  "fake", "real", "fake", ...]
 
-        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 2, frames_to_model = 4)
-        >>> mask
-        ["real", "real", "real", "real", "fake", "fake", "real", "real", "fake", "fake", "real", "real", ...]
+            >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real = 2, fake = 2, frames_to_model = 4)
+            >>> mask
+            ["real", "real", "real", "real", "fake", "fake", "real", "real", "fake", "fake", "real", "real", ...]
 
-        >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real_fake_pattern = ["fake", "real", "real"] frames_to_model = 2)
-        >>> mask
-        ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
+            >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real_fake_pattern = ["fake", "real", "real"] frames_to_model = 2)
+            >>> mask
+            ["real", "real", "fake", "real", "real", "fake", "real", "real", "fake", ...]
+
+            >>> # не стоит начинать паттерн с "real", так как первоначально уже считываеются реальные кадры, а потом начинается паттерн
+            >>> frames, mask = model.predictVideo("path/to/video", "where/to/save", real_fake_pattern = ["real", "fake"] frames_to_model = 2)
+            >>> mask
+            ["real", "real", "real", "fake", "real", "fake", "real", "fake", ...]
         """
 
         if not real_fake_pattern:
@@ -231,8 +267,7 @@ class Model:
         
         pattern_len = len(real_fake_pattern)
 
-        if save_path:
-            save_path = str(save_path)
+        if save_path: save_path = str(save_path)
         video_path = str(video_path)
         
         cap = cv2.VideoCapture(video_path)
@@ -253,7 +288,7 @@ class Model:
                 frames.append(frame)
                 real_fake_mask.append("real")
                 if save_path: writer.write(frame)
-            else:
+            else: # failed to read video
                 cap.release()
                 if save_path: writer.release()
                 raise RuntimeError(f"Unable to read video {video_path = }")
@@ -265,7 +300,7 @@ class Model:
                 if ret:
                     frame = cv2.resize(frame, (h, w))
                     
-                    if real_fake_pattern[i % pattern_len] == "real": # read real frame
+                    if real_fake_pattern[i % pattern_len] == "real": # read next frame
                         frames.append(frame)
                         real_fake_mask.append("real")
                         if save_path: writer.write(frame)
@@ -282,10 +317,9 @@ class Model:
         except Exception:
             print(traceback.format_exc())
 
-        # Всегда закрываем файлы, даже в случае неридвиденных ошибок, например CUDA out of memory
+        # Всегда закрываем файлы, даже в случае непредвиденных ошибок, например CUDA out of memory
         finally:
             cap.release()
             if save_path: writer.release()
 
-        # if return_values:
         return frames, real_fake_mask
