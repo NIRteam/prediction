@@ -26,6 +26,20 @@ from .utils import fwd2bwd
 ### TODO add full support for cpu
 
 class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
+    """
+    to install pretrained models:
+        pip install gdown
+
+        # city dataset
+        gdown 1jILbS8Gm4E5Xx4tDCPZh_7rId0eo8r9W
+        
+        # kitti dataset
+        gdown 1WrV30prRiS4hWOQBnVPUxdaTlp9XxmVK
+        
+        # vimeo dataset
+        gdown 14_xQ3Yl3mO89hr28hbcQW3h63lLrcYY0
+
+    """
     def __init__(self, load_path, device="cuda"):
         self.device = device
         self.dmvfn = DMVFN_model()
@@ -71,6 +85,17 @@ class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
 
 
 class VPvI: # Video Prediction via Interpolation
+    """
+    to install pretrained models:
+        pip install gdown
+
+        # IFNet
+        gdown 1Q_Pa0kjOLbmJKFsamVMi0SCGMI6RigIa
+
+        # RAFT
+        gdown 1gBpZIYOZaK1D9rANDuTos6jsn3uLwQoL
+    """
+
     def __init__(self, model_load_path = "model/pretrained_models/IFNet.pkl", flownet_load_path = "model/pretrained_models/raft-kitti.pth", device="cuda"):
         self.device = device
         self.model = IFNet()
