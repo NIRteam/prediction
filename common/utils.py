@@ -28,6 +28,36 @@ def create_data_dirs(args):
     exp_dir = create_exp_dir()
     return exp_dir
 
+def read_img_from_path(images_paths: list) -> list:
+    images = []
+
+    for path in images_paths:
+        images.append(cv2.imread(path))
+    # img1 = cv2.imread(img1_path)
+    # img2 = cv2.imread(img2_path)
+
+    # if img1.shape != img2.shape:
+    #     logger.warning(
+    #         'Image shapes are different! Scaling img2 to img1 shape...')
+    #     img2 = cv2.resize(
+    #         img2, (img1.shape[1], img1.shape[0]), interpolation=cv2.INTER_AREA)
+
+    return images
+
+def scale_imgs(images, size):
+    scaled_images = []
+    for image in images:
+        scaled_images.append(cv2.resize(image, (size[1], size[0]),
+            interpolation=cv2.INTER_AREA))
+    return scaled_images
+
+def write_result_img(images):
+    if len(images) == 1:
+        cv2.imwrite(f'test_{idx}.jpg', images)
+        return
+    for idx, image in enumerate(images):
+        cv2.imwrite(f'test_{idx}.jpg', image)
+        return
 
 def get_imgs_from_img(img1_path, img2_path):
     img1 = cv2.imread(img1_path)
