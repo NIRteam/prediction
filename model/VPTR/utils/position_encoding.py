@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import math
 import numpy as np
-from .utils.misc import NestedTensor
+from .misc import NestedTensor
 
 """
 1D position encoding and 2D postion encoding

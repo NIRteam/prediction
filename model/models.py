@@ -7,6 +7,7 @@ import os
 from copy import deepcopy
 from pathlib import Path
 import argparse
+from math import ceil
 
 try: # in ipython
     get_ipython()
@@ -69,9 +70,9 @@ class VPTR: # Video Prediction TransformeR
                                               window_size=4, Spatial_FFN_hidden_ratio=4, rpe=rpe
                                               ).to(device)
 
-        VPTR_Enc = VPTR_Enc.eval()
-        VPTR_Dec = VPTR_Dec.eval()
-        VPTR_Transformer = VPTR_Transformer.eval()
+        self.VPTR_Enc = self.VPTR_Enc.eval()
+        self.VPTR_Dec = self.VPTR_Dec.eval()
+        self.VPTR_Transformer = self.VPTR_Transformer.eval()
 
         if (load_path_Enc is not None) or (load_path_Dec is not None) or (load_path_Transformer is not None):
             raise NotImplementedError("Loading models not implemented yet")
@@ -93,11 +94,13 @@ class VPTR: # Video Prediction TransformeR
             imgs[i] = cv2.resize(imgs[i], (self.w, self.h))
             imgs[i] = (imgs[i].transpose(2, 0, 1).astype('float32'))
         
-        img = torch.tensor(imgs)
+        # TODO should be a better way of makeing inputs
+        # UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor.
+        img = torch.tensor(np.array(imgs))
         img = img.unsqueeze(0) # NCHW
         img = img.to(self.device) / 255.
 
-        print(img.shape)
+        # print(img.shape)
 
         past_gt_feats = self.VPTR_Enc(img)
         pred_feats = self.VPTR_Transformer(past_gt_feats)
