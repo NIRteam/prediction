@@ -11,3 +11,6 @@ scikit-image==0.20.0
 scipy==1.9.1
 sklearn==0.0.post4
 tifffile==2023.4.12
+torch==2.0.0
+pytorch-msssim==0.2.1
+tqdm==4.65.0
