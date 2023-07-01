@@ -7,6 +7,7 @@ import os
 from copy import deepcopy
 from pathlib import Path
 import argparse
+from math import ceil
 
 try: # in ipython
     get_ipython()
@@ -16,14 +17,100 @@ except NameError: # regular python
 
 
 from .DMVFN import DMVFN as DMVFN_model
+
 from .VPvI import IFNet, resample
 from .RAFT import RAFT
+
+from .VPTR import VPTREnc, VPTRDec, VPTRFormerFAR
 
 from .utils import convertModuleNames
 from .utils import fwd2bwd
 
 
 ### TODO add full support for cpu
+
+
+class VPTR: # Video Prediction TransformeR
+    """
+    No pretrained models yet
+    Need to pass height and width
+    """
+
+    def __init__(self,
+                 load_path_Enc=None,
+                 load_path_Dec=None,
+                 load_path_Transformer=None,
+                 h = 720,
+                 w = 1280,
+                 num_past_frames = 2,
+                 num_future_frames = 2,
+                 n_downsampling = 6,
+                 device="cuda"):
+        
+        self.device = device
+        self.h = h
+        self.w = w
+        
+        # resume_ckpt = Path('checkpoints/BAIR_FAR.tar') #The trained Transformer checkpoint file
+        # resume_AE_ckpt = Path('checkpoints/BAIR_AE.tar') #The trained AutoEncoder checkpoint file
+
+        encH, encW, encC = (ceil(h / (2**n_downsampling)), 
+                            ceil(w / (2**n_downsampling)), 
+                            528)
+        img_channels = 3
+        # N = 2
+        rpe = True
+
+        self.VPTR_Enc = VPTREnc(img_channels, feat_dim = encC, n_downsampling = n_downsampling, padding_type = 'zero').to(device)
+
+        self.VPTR_Dec = VPTRDec(img_channels, feat_dim = encC, n_downsampling = n_downsampling, out_layer = 'Sigmoid', padding_type = 'zero').to(device) 
+
+        self.VPTR_Transformer = VPTRFormerFAR(num_past_frames, num_future_frames, encH=encH, encW = encW, d_model=encC, 
+                                              nhead=8, num_encoder_layers=12, dropout=0.1, 
+                                              window_size=4, Spatial_FFN_hidden_ratio=4, rpe=rpe
+                                              ).to(device)
+
+        self.VPTR_Enc = self.VPTR_Enc.eval()
+        self.VPTR_Dec = self.VPTR_Dec.eval()
+        self.VPTR_Transformer = self.VPTR_Transformer.eval()
+
+        if (load_path_Enc is not None) or (load_path_Dec is not None) or (load_path_Transformer is not None):
+            raise NotImplementedError("Loading models not implemented yet")
+
+
+        # loss_name_list = ['T_MSE', 'T_GDL', 'T_gan', 'T_total', 'Dtotal', 'Dfake', 'Dreal']
+
+        # loss_dict, start_epoch = resume_training({'VPTR_Enc': VPTR_Enc, 'VPTR_Dec': VPTR_Dec}, {}, resume_AE_ckpt, loss_name_list)
+        # if resume_ckpt is not None:
+        #     loss_dict, start_epoch = resume_training({'VPTR_Transformer': VPTR_Transformer}, 
+        #                                             {}, resume_ckpt, loss_name_list)
+
+
+
+    @torch.no_grad()
+    def evaluate(self, imgs : list[np.ndarray]):
+        for i in range(len(imgs)):
+            # HWC (height width channel) -> CHW (channel height width)
+            imgs[i] = cv2.resize(imgs[i], (self.w, self.h))
+            imgs[i] = (imgs[i].transpose(2, 0, 1).astype('float32'))
+        
+        # TODO should be a better way of makeing inputs
+        # UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor.
+        img = torch.tensor(np.array(imgs))
+        img = img.unsqueeze(0) # NCHW
+        img = img.to(self.device) / 255.
+
+        # print(img.shape)
+
+        past_gt_feats = self.VPTR_Enc(img)
+        pred_feats = self.VPTR_Transformer(past_gt_feats)
+        pred = self.VPTR_Dec(pred_feats[:, -1:, ...])
+    
+        pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
+        pred = pred.astype("uint8")
+        
+        return pred
+
 
 class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
     """
