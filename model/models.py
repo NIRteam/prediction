@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 import argparse
 from math import ceil
+from constants import constant
 
 try: # in ipython
     get_ipython()
@@ -393,6 +394,9 @@ class Model:
         frames : list[np.ndarray] = []
         real_fake_mask : list[str] = []
 
+        window_name = 'Video'
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
         for i in range(frames_to_model):
             ret, frame = cap.read()
             if ret:
@@ -422,7 +426,9 @@ class Model:
                         frames.append(img_pred)
                         real_fake_mask.append("fake")
                         if save_path: writer.write(img_pred)
-
+                    if constant.SHOW_VIDEO:
+                        cv2.imshow(window_name, frames[-1])
+                        cv2.waitKey(25)
                 else:
                     break
         
@@ -433,5 +439,6 @@ class Model:
         finally:
             cap.release()
             if save_path: writer.release()
+            cv2.destroyAllWindows()
 
         return frames, real_fake_mask

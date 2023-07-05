@@ -1,7 +1,7 @@
 # pip install gdown
 
 cd model/
-!mkdir pretrained_models
+mkdir pretrained_models
 cd pretrained_models
 
 # DMVFN
