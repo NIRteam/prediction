@@ -1,24 +1,23 @@
 import torch
+from torch.autograd import Variable
+
 import cv2
 import numpy as np
 
-import traceback
 import os
-from copy import deepcopy
-from pathlib import Path
 import argparse
+import traceback
+
+from pathlib import Path
+from copy import deepcopy
+
 from math import ceil
 
-try: # in ipython
-    get_ipython()
-    from tqdm.notebook import tqdm
-except NameError: # regular python 
-    from tqdm import tqdm
-
+from tqdm.auto import tqdm
 
 from .DMVFN import DMVFN as DMVFN_model
 
-from .VPvI import IFNet, resample
+from .VPvI import IFNet, resample, Consistency
 from .RAFT import RAFT
 
 from .VPTR import VPTREnc, VPTRDec, VPTRFormerFAR
@@ -183,34 +182,32 @@ class VPvI: # Video Prediction via Interpolation
         gdown 1gBpZIYOZaK1D9rANDuTos6jsn3uLwQoL
     """
 
-    def __init__(
-        self, 
-        model_load_path = "model/pretrained_models/IFNet.pkl", 
-        flownet_load_path = "model/pretrained_models/raft-kitti.pth", 
-        scale_list : list[int] = [4,2,1],
-        iters : int = 400,
-        consist_weight = 0.1,
-        interp_weight = 1,
-        lr = 0.0001,
-        use_consistency_loss = False,
-        fast_approximation = False,
-        device="cuda"):
+    def __init__(self,
+                 model_load_path = "RAFT/pretrained_models/flownet.pkl",
+                 # model_load_path = "train_log/flownet.pkl",
+                 flownet_load_path = "RAFT/pretrained_models/raft-kitti.pth",
+                 scale_list : list[int] = [8, 4, 2, 1],
+                 iters : int = 400,
+                 consist_weight = 0.1,
+                 interp_weight = 1,
+                 lr = 0.0001,
+                 use_consistency_loss = False,
+                 fast_approximation = False,
+                 define_random_flow = False,
+                 device="cuda",):
 
         self.device = device
-
         self.interp_model = IFNet()
         self.interp_model.to(device)
 
         for param in self.interp_model.parameters():
             param.requires_grad = False
 
-        # load IFNet
         if torch.cuda.is_available():
-            self.interp_model.load_state_dict(convertModuleNames(torch.load(model_load_path)))
+            self.interp_model.load_state_dict(convert(torch.load(model_load_path)))
         else:
-            self.interp_model.load_state_dict(convertModuleNames(torch.load(model_load_path, map_location ='cpu')))
+            self.interp_model.load_state_dict(convert(torch.load(model_load_path, map_location ='cpu')))
 
-        # load FlowNet
         # Emulate arguments for RAFT
         args = argparse.Namespace()
         args.model = Path(flownet_load_path)
@@ -218,11 +215,11 @@ class VPvI: # Video Prediction via Interpolation
         args.mixed_precision = True
         args.alternate_corr = False
 
-        self.flowNet = torch.nn.DataParallel(RAFT(args))
+        self.flowNet = nn.DataParallel(RAFT(args))
+        self.flowNet.to(device)
         self.flowNet.load_state_dict(torch.load(flownet_load_path, map_location ='cpu'))
 
         self.flowNet = self.flowNet.module
-
         for param in self.flowNet.parameters():
             param.requires_grad = False
 
@@ -231,19 +228,94 @@ class VPvI: # Video Prediction via Interpolation
         self.lr = lr
         self.fast_approximation = fast_approximation
         self.use_consistency_loss = use_consistency_loss
+        self.define_random_flow = define_random_flow
 
         self.iters = iters
         self.scale_list = scale_list
 
-        self.l1_loss = nn.L1Loss()
 
-        if self.use_consistency_loss:
-            raise NotImplementedError("Consistency loss is not implemented")
+        self.l1_loss = nn.L1Loss()
+        self.flow_consistency_loss = Consistency()
+        # self.smoothness_loss = SmoothLoss()
+        # self.tv_loss = TVLoss()
 
 
     def evaluate(
         self, imgs : list[np.ndarray]
         ) -> np.ndarray:
+
+        # assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
+
+        # # HWC -> CHW
+        # im1 = torch.tensor(imgs[0].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
+        # im2 = torch.tensor(imgs[1].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
+
+        # _, flow_2to1 = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
+
+        # if self.fast_approximation:
+        #     bwd_flow_3to2 = - flow_2to1
+        
+        # else:
+        #     flow_2to3 = - flow_2to1.detach().cpu().numpy()
+
+        #     bwd_flow_3to2 = fwd2bwd(flow_2to3)
+
+        #     bwd_flow_3to2 = torch.from_numpy(bwd_flow_3to2).cuda().float()
+
+        # if not self.iters: # don't do any optimisation
+        #     pred = resample(im2, bwd_flow_3to2)
+        #     pred = np.array(pred.detach().cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
+        #     pred = pred.astype("uint8")
+
+        #     return pred
+
+
+
+        # flow = Variable(bwd_flow_3to2, requires_grad=True)
+        # optimizer = torch.optim.Adam(
+        #     [{'params': flow, 'lr': self.lr}]
+        # )
+
+        # # frame_pred = resample(im2, flow)
+
+        # for it in range(self.iters):
+        #     optimizer.zero_grad()
+
+        #     frame_pred = resample(im2, flow)
+
+        #     imgs = torch.cat((im1, frame_pred), 1)
+
+        #     flow_2to3_pred, mask, merged, merged_final = self.interp_model(imgs, self.scale_list)
+
+        #     mid = merged_final[2]
+        #     mid = torch.clamp(mid, 0.0, 1.0)
+
+        #     interp_result = mid
+
+        #     # Loss functions
+        #     loss = 0.0
+
+        #     loss_interp = self.l1_loss(interp_result, im2) * self.interp_weight
+        #     loss += loss_interp
+        #     # loss = loss_interp
+
+        #     # if self.use_consistency_loss:
+        #         # fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
+        #         # consist_loss = consist_loss * self.consist_weight
+        #         # loss += consist_loss
+
+        #     loss.backward()
+        #     optimizer.step()
+
+
+
+        # pred = frame_pred
+
+        # pred = np.array(pred.detach().cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
+        # pred = pred.astype("uint8")
+
+        # return pred
+
 
         assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
 
@@ -251,7 +323,11 @@ class VPvI: # Video Prediction via Interpolation
         im1 = torch.tensor(imgs[0].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
         im2 = torch.tensor(imgs[1].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
 
-        _, flow_2to1 = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
+        if self.define_random_flow:
+            flow_2to1 = (0.1**0.5)*torch.randn((1, 2, *im1.shape[-2:]))
+
+        else:
+            _, flow_2to1 = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
 
         if self.fast_approximation:
             bwd_flow_3to2 = - flow_2to1
@@ -261,18 +337,16 @@ class VPvI: # Video Prediction via Interpolation
 
             bwd_flow_3to2 = fwd2bwd(flow_2to3)
 
-            bwd_flow_3to2 = torch.from_numpy(bwd_flow_3to2).cuda().float()
+            bwd_flow_3to2 = torch.from_numpy(bwd_flow_3to2)
 
         if not self.iters: # don't do any optimisation
-            pred = resample(im2, bwd_flow_3to2)
+            pred = resample(im2, bwd_flow_3to2.cuda().float())
             pred = np.array(pred.detach().cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
             pred = pred.astype("uint8")
 
             return pred
 
-
-
-        flow = Variable(bwd_flow_3to2, requires_grad=True)
+        flow = Variable(bwd_flow_3to2.cuda().float(), requires_grad=True)
         optimizer = torch.optim.Adam(
             [{'params': flow, 'lr': self.lr}]
         )
@@ -286,12 +360,23 @@ class VPvI: # Video Prediction via Interpolation
 
             imgs = torch.cat((im1, frame_pred), 1)
 
-            flow_2to3_pred, mask, merged, merged_final = self.interp_model(imgs, self.scale_list)
+            # interp_result, flow_2to3_pred, warp_pred = self.interp_model(imgs, scale_list)
+            flow_2to3_pred, mask, merged = self.interp_model(
+                imgs, 0.5, self.scale_list)
 
-            mid = merged_final[2]
-            mid = torch.clamp(mid, 0.0, 1.0)
+            flow_2to3_pred = flow_2to3_pred[3][:, 2:4]
+            
+            # print(flow_2to3_pred, flow_2to3_pred.shape)
 
-            interp_result = mid
+            # mid = merged_final[2]
+            # mid = torch.clamp(mid, 0.0, 1.0)
+
+            # warp_pred = merged[2][1]
+            # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
+
+            interp_result = merged[3]
+            # warp_pred = merged[2][1]
+            # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
 
             # Loss functions
             loss = 0.0
@@ -300,15 +385,29 @@ class VPvI: # Video Prediction via Interpolation
             loss += loss_interp
             # loss = loss_interp
 
-            # if self.use_consistency_loss:
-                # fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
-                # consist_loss = consist_loss * self.consist_weight
-                # loss += consist_loss
+            if self.use_consistency_loss:
+                fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
+                consist_loss = consist_loss * self.consist_weight
+                loss += consist_loss
 
             loss.backward()
             optimizer.step()
 
+        frame_pred_before = resample(im2.detach().float(), flow.float())
 
+        im2_vis = im2.detach().cpu().numpy()
+        flow_ = flow.detach().cpu().numpy()
+        
+        bwd_mask_ = 1 - bwd_mask.detach().cpu().numpy().astype(np.uint8)
+        kernel = np.ones((5, 5), np.uint8)
+        bwd_mask_x = cv2.dilate(bwd_mask_[0,0,...], kernel, iterations=1)
+        bwd_mask_y = cv2.dilate(bwd_mask_[0,1,...], kernel, iterations=1)
+        flow_x = regionfill(flow_[0,0,...], bwd_mask_x.astype(int))
+        flow_y = regionfill(flow_[0,1,...], bwd_mask_y.astype(int))
+        flow_new = np.concatenate([flow_x[None,None,...], flow_y[None,None,...]], axis=1)
+        flow_new = torch.from_numpy(flow_new).cuda()
+
+        frame_pred = resample(im2.detach().float(), flow_new.float())
 
         pred = frame_pred
 
@@ -316,6 +415,7 @@ class VPvI: # Video Prediction via Interpolation
         pred = pred.astype("uint8")
 
         return pred
+
 
 
 class Model:
