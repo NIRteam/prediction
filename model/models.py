@@ -235,7 +235,7 @@ class VPvI: # Video Prediction via Interpolation
         self.scale_list = scale_list
 
 
-        self.l1_loss = nn.L1Loss()
+        self.l1_loss = torch.nn.L1Loss()
         self.flow_consistency_loss = Consistency()
         # self.smoothness_loss = SmoothLoss()
         # self.tv_loss = TVLoss()
