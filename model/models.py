@@ -354,7 +354,7 @@ class VPvI: # Video Prediction via Interpolation
 
         # frame_pred = resample(im2, flow)
 
-        for it in tqdm(range(self.iters)): ### TODO remove tqdm
+        for it in range(self.iters):
             optimizer.zero_grad()
 
             frame_pred = resample(im2, flow)
