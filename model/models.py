@@ -394,6 +394,8 @@ class VPvI: # Video Prediction via Interpolation
             loss.backward()
             optimizer.step()
 
+        ### TODO если не используется consistency loss, то нужно посчитать bwd_mask тута
+
         frame_pred_before = resample(im2.detach().float(), flow.float())
 
         im2_vis = im2.detach().cpu().numpy()
