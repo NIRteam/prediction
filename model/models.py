@@ -17,7 +17,8 @@ from tqdm.auto import tqdm
 
 from .DMVFN import DMVFN as DMVFN_model
 
-from .VPvI import IFNet, resample, Consistency
+from .VPvI import IFNet, resample, regionfill, Consistency
+
 from .RAFT import RAFT
 
 from .VPTR import VPTREnc, VPTRDec, VPTRFormerFAR
@@ -204,9 +205,9 @@ class VPvI: # Video Prediction via Interpolation
             param.requires_grad = False
 
         if torch.cuda.is_available():
-            self.interp_model.load_state_dict(convert(torch.load(model_load_path)))
+            self.interp_model.load_state_dict(convertModuleNames(torch.load(model_load_path)))
         else:
-            self.interp_model.load_state_dict(convert(torch.load(model_load_path, map_location ='cpu')))
+            self.interp_model.load_state_dict(convertModuleNames(torch.load(model_load_path, map_location ='cpu')))
 
         # Emulate arguments for RAFT
         args = argparse.Namespace()
@@ -215,7 +216,7 @@ class VPvI: # Video Prediction via Interpolation
         args.mixed_precision = True
         args.alternate_corr = False
 
-        self.flowNet = nn.DataParallel(RAFT(args))
+        self.flowNet = torch.nn.DataParallel(RAFT(args))
         self.flowNet.to(device)
         self.flowNet.load_state_dict(torch.load(flownet_load_path, map_location ='cpu'))
 
@@ -385,10 +386,10 @@ class VPvI: # Video Prediction via Interpolation
             loss += loss_interp
             # loss = loss_interp
 
-            if self.use_consistency_loss:
-                fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
-                consist_loss = consist_loss * self.consist_weight
-                loss += consist_loss
+            # if self.use_consistency_loss:
+            fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
+            consist_loss = consist_loss * self.consist_weight
+            loss += consist_loss
 
             loss.backward()
             optimizer.step()
