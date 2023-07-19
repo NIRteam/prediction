@@ -94,8 +94,6 @@ class VPTR: # Video Prediction TransformeR
             imgs[i] = cv2.resize(imgs[i], (self.w, self.h))
             imgs[i] = (imgs[i].transpose(2, 0, 1).astype('float32'))
         
-        # TODO should be a better way of makeing inputs
-        # UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor.
         img = torch.tensor(np.array(imgs))
         img = img.unsqueeze(0) # NCHW
         img = img.to(self.device) / 255.
@@ -188,11 +186,11 @@ class VPvI: # Video Prediction via Interpolation
                  # model_load_path = "train_log/flownet.pkl",
                  flownet_load_path = "RAFT/pretrained_models/raft-kitti.pth",
                  scale_list : list[int] = [8, 4, 2, 1],
-                 iters : int = 400,
+                 iters : int = 1,
                  consist_weight = 0.1,
                  interp_weight = 1,
                  lr = 0.0001,
-                 use_consistency_loss = False,
+                 # use_consistency_loss = False,
                  fast_approximation = False,
                  define_random_flow = False,
                  device="cuda",):
@@ -228,7 +226,7 @@ class VPvI: # Video Prediction via Interpolation
         self.interp_weight = interp_weight
         self.lr = lr
         self.fast_approximation = fast_approximation
-        self.use_consistency_loss = use_consistency_loss
+        # self.use_consistency_loss = use_consistency_loss
         self.define_random_flow = define_random_flow
 
         self.iters = iters
@@ -294,18 +292,8 @@ class VPvI: # Video Prediction via Interpolation
 
             flow_2to3_pred = flow_2to3_pred[3][:, 2:4]
             
-            # print(flow_2to3_pred, flow_2to3_pred.shape)
-
-            # mid = merged_final[2]
-            # mid = torch.clamp(mid, 0.0, 1.0)
-
-            # warp_pred = merged[2][1]
-            # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
-
             interp_result = merged[3]
-            # warp_pred = merged[2][1]
-            # warp_pred = torch.clamp(warp_pred, 0.0, 1.0)
-
+            
             # Loss functions
             loss = 0.0
 
