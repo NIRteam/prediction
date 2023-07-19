@@ -8,6 +8,14 @@ from common.logging import configure_logger
 logger = configure_logger(__name__)
 
 
+def read_img(path, w=1280, h=720):
+    # img = Image.open(path)
+    # img = np.array(img)
+    img = cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (w, h))
+    return img
+
+
 def create_data_dirs(args):
     """По этому поводу хотел обсудить со всеми:
     1.Проверять папку output смысла нет, ее можно создать при первом запуске
