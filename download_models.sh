@@ -1,7 +1,7 @@
 # pip install gdown
 
 cd model/
-!mkdir pretrained_models
+mkdir pretrained_models
 cd pretrained_models
 
 # DMVFN
@@ -13,7 +13,7 @@ gdown 1WrV30prRiS4hWOQBnVPUxdaTlp9XxmVK
 gdown 14_xQ3Yl3mO89hr28hbcQW3h63lLrcYY0
 
 # IFNet
-gdown 1Q_Pa0kjOLbmJKFsamVMi0SCGMI6RigIa
+gdown 1dLPJRe3l3uDniihosbqi-940biPEktFN
 
 # RAFT
 gdown 1gBpZIYOZaK1D9rANDuTos6jsn3uLwQoL

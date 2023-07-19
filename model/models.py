@@ -177,7 +177,7 @@ class VPvI: # Video Prediction via Interpolation
         pip install gdown
 
         # IFNet
-        gdown 1Q_Pa0kjOLbmJKFsamVMi0SCGMI6RigIa
+        gdown 1dLPJRe3l3uDniihosbqi-940biPEktFN
 
         # RAFT
         gdown 1gBpZIYOZaK1D9rANDuTos6jsn3uLwQoL
@@ -244,79 +244,6 @@ class VPvI: # Video Prediction via Interpolation
     def evaluate(
         self, imgs : list[np.ndarray]
         ) -> np.ndarray:
-
-        # assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
-
-        # # HWC -> CHW
-        # im1 = torch.tensor(imgs[0].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
-        # im2 = torch.tensor(imgs[1].transpose(2, 0, 1)).unsqueeze(0).cuda().float() / 255.
-
-        # _, flow_2to1 = self.flowNet(im2 * 255, im1 * 255, iters=10, test_mode=True)
-
-        # if self.fast_approximation:
-        #     bwd_flow_3to2 = - flow_2to1
-        
-        # else:
-        #     flow_2to3 = - flow_2to1.detach().cpu().numpy()
-
-        #     bwd_flow_3to2 = fwd2bwd(flow_2to3)
-
-        #     bwd_flow_3to2 = torch.from_numpy(bwd_flow_3to2).cuda().float()
-
-        # if not self.iters: # don't do any optimisation
-        #     pred = resample(im2, bwd_flow_3to2)
-        #     pred = np.array(pred.detach().cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
-        #     pred = pred.astype("uint8")
-
-        #     return pred
-
-
-
-        # flow = Variable(bwd_flow_3to2, requires_grad=True)
-        # optimizer = torch.optim.Adam(
-        #     [{'params': flow, 'lr': self.lr}]
-        # )
-
-        # # frame_pred = resample(im2, flow)
-
-        # for it in range(self.iters):
-        #     optimizer.zero_grad()
-
-        #     frame_pred = resample(im2, flow)
-
-        #     imgs = torch.cat((im1, frame_pred), 1)
-
-        #     flow_2to3_pred, mask, merged, merged_final = self.interp_model(imgs, self.scale_list)
-
-        #     mid = merged_final[2]
-        #     mid = torch.clamp(mid, 0.0, 1.0)
-
-        #     interp_result = mid
-
-        #     # Loss functions
-        #     loss = 0.0
-
-        #     loss_interp = self.l1_loss(interp_result, im2) * self.interp_weight
-        #     loss += loss_interp
-        #     # loss = loss_interp
-
-        #     # if self.use_consistency_loss:
-        #         # fwd_mask, bwd_mask, consist_loss = self.flow_consistency_loss(flow_2to3_pred, flow, 1)
-        #         # consist_loss = consist_loss * self.consist_weight
-        #         # loss += consist_loss
-
-        #     loss.backward()
-        #     optimizer.step()
-
-
-
-        # pred = frame_pred
-
-        # pred = np.array(pred.detach().cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
-        # pred = pred.astype("uint8")
-
-        # return pred
-
 
         assert len(imgs) == 2, f"only 2 images can be accepted as input, {len(imgs)} were passed"
 
@@ -393,8 +320,6 @@ class VPvI: # Video Prediction via Interpolation
 
             loss.backward()
             optimizer.step()
-
-        ### TODO если не используется consistency loss, то нужно посчитать bwd_mask тута
 
         frame_pred_before = resample(im2.detach().float(), flow.float())
 
