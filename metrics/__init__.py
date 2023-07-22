@@ -1,1 +1,1 @@
-from .collect_metrcis import collectMetrcisSubsequent, predictVideo
+from .collect_metrcis import collectMetrcisSubsequent, predictVideo, predictVideoIterator

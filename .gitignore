@@ -3,6 +3,10 @@
 *.pth
 pretrained_models
 
+# input / output
+input
+output
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

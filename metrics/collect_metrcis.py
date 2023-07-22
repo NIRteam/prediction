@@ -1,7 +1,10 @@
-from ..common.utils import getFrames
-from .metrics import compute_metrics, compute_important_metrics, get_metrics_example, get_important_metrics_example
-
 from pathlib import Path
+
+import cv2
+from tqdm.auto import tqdm
+
+from common.utils import getFrames
+from .metrics import compute_metrics, compute_important_metrics, get_metrics_example, get_important_metrics_example
 
 
 # collect metric for every subsequent frame predicted
@@ -80,8 +83,8 @@ def collectMetrcisSubsequent(
 
 def predictVideo(
     model,
-    video_path : str | Path,
-    save_path : str | Path | None = None,
+    video_path : str,
+    save_path : str = None,
     real_fake_pattern : list[str] = [],
     real : int = 2,
     fake : int = 1,
@@ -103,7 +106,7 @@ def predictVideo(
 
     if save_path:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        writer = cv2.VideoWriter(save_path, fourcc, fps, (h, w))
+        writer = cv2.VideoWriter(save_path, fourcc, fps, (w, h))
 
     empty_metric = get_metrics_example(0)
 
@@ -114,7 +117,7 @@ def predictVideo(
     frames = [ # all frames
         next(frames_iterator) for i in range(frames_as_input)]
 
-    for i in range(frames_as_input)
+    for i in range(frames_as_input):
         for metric_name in empty_metric:
             video_metrics[metric_name].append(0)
 
@@ -125,7 +128,6 @@ def predictVideo(
     for real in frames_iterator:            
         if real_fake_pattern[i % pattern_len] == "real": # read next frame
             frames.append(real)
-            if save_path: writer.write(real)
 
             for metric_name in empty_metric:
                 video_metrics[metric_name].append(0)
@@ -133,12 +135,13 @@ def predictVideo(
         else: # predict next frame
             fake = model.predict(frames[-frames_as_input:])
             frames.append(fake)
-            if save_path: writer.write(fake)
 
             frame_metrics = compute_metrics(real, fake)
 
             for metric_name in frame_metrics:
                 video_metrics[metric_name].append(frame_metrics[metric_name])
+
+        if save_path: writer.write(frames[-1])
 
         del frames[0] # dont need it anymore
 
@@ -150,8 +153,8 @@ def predictVideo(
 
 def predictVideoIterator(
     model,
-    video_path : str | Path,
-    save_path : str | Path | None = None,
+    video_path : str,
+    save_path : str = None,
     real_fake_pattern : list[str] = [],
     real : int = 2,
     fake : int = 1,
@@ -173,18 +176,18 @@ def predictVideoIterator(
 
     if save_path:
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        writer = cv2.VideoWriter(save_path, fourcc, fps, (h, w))
+        writer = cv2.VideoWriter(save_path, fourcc, 30, (w, h))
 
     empty_metric = get_metrics_example(-1)
 
-    video_metrics = {i : get_metrics_example() for i in range()}
+    video_metrics = get_metrics_example([])
 
     frames_iterator = getFrames(video_path, w, h)
 
     frames = [ # all frames
         next(frames_iterator) for i in range(frames_as_input)]
 
-    for i in range(frames_as_input)
+    for i in range(frames_as_input):
         for metric_name in empty_metric:
             video_metrics[metric_name].append(-1)
 
@@ -192,7 +195,7 @@ def predictVideoIterator(
         for i in range(frames_as_input):
             writer.write(frames[i])
 
-    for real in frames_iterator:            
+    for i, real in enumerate(frames_iterator):
         if real_fake_pattern[i % pattern_len] == "real": # read next frame
             frames.append(real)
             if save_path: writer.write(real)

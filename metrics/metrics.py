@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import math
 from copy import deepcopy
+import torch
 
 # metrics
 from sklearn.metrics.pairwise import cosine_similarity

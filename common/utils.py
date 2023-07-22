@@ -6,13 +6,14 @@ import sys
 
 from pathlib import Path
 
+from tqdm.auto import tqdm
+
 from common.logging import configure_logger
 logger = configure_logger(__name__)
 
 
 def getFrames(
     video_path : str,
-    files : list = None,
     w = 1280,
     h = 720):
 
@@ -22,7 +23,7 @@ def getFrames(
         raise ValueError(f"Path f{video_path} does not exist")
 
     if video_path.suffix in [".mp4",]: ### TODO add other extensions
-        cap = cv2.VideoCapture(video_path)
+        cap = cv2.VideoCapture(str(video_path))
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         for i in tqdm(range(frame_count)):
@@ -32,7 +33,10 @@ def getFrames(
                 cap.release()
                 raise RuntimeError(f"Could not read video f{video_path}")
 
-            yield cv2.resize(frame, (w, h))
+            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (w, h))
+
+            yield frame
 
         cap.release()
 
@@ -50,7 +54,8 @@ def getFrames(
 def read_img(path, w=1280, h=720):
     # img = Image.open(path)
     # img = np.array(img)
-    img = cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
+    img = cv2.imread(str(path))
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (w, h))
     return img
 
@@ -115,7 +120,7 @@ def parse_args():
         help="path to input dir")
 
     parser.add_argument(
-        '--model_name', type=str, default="DMVFN",
+        '--model', type=str, default="DMVFN",
         help="which model to use for prediction. DMVFN or VPvI. DMVFN by default")
 
     parser.add_argument(
@@ -143,6 +148,10 @@ def parse_args():
     parser.add_argument(
         '--fake', type=int, default=1,
         help="how many fake frames in predcition pattern for regular predcition")
+
+    parser.add_argument(
+        '--device', type=str, default="cpu",
+        help="Which device to use for prediction. cuda or cpu")
     
     # parser.add_argument(
     #     '--clean', action='store_true',
