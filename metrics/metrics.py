@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import math
+from copy import deepcopy
 
 # metrics
 from sklearn.metrics.pairwise import cosine_similarity
@@ -173,17 +174,49 @@ def compute_metrics(img1, img2):
     }
 
 
-def get_metrics_example():
+def get_metrics_example(filler=[]):
     return {
-        "cossim" : [],
-        "hamming" : [],
-        "mse" : [],
-        "psnr" : [],
-        "ssim" : [],
-        "yuv_psnr" : [],
-        "yuv_ssim" : [],
-        "lpips" : [],
-        "ms_ssim" : [],
-        "yuv_ms_ssim" : [],
-        "erqa" : [],
+        "cossim" : deepcopy(filler),
+        "hamming" : deepcopy(filler),
+        "mse" : deepcopy(filler),
+        "psnr" : deepcopy(filler),
+        "ssim" : deepcopy(filler),
+        "yuv_psnr" : deepcopy(filler),
+        "yuv_ssim" : deepcopy(filler),
+        "lpips" : deepcopy(filler),
+        "ms_ssim" : deepcopy(filler),
+        "yuv_ms_ssim" : deepcopy(filler),
+        "erqa" : deepcopy(filler),
+    }
+
+
+def compute_important_metrics(img1, img2): ### Idealy make config for it
+    return {
+        # "cossim" : cosine_similarity_metric(img1, img2),
+        "hamming" : hamming_distance_metric(img1, img2),
+        "mse" : mse_metric(img1, img2),
+        "psnr" : psnr_metric(img1, img2),
+        "ssim" : ssim_metric(img1, img2),
+        # "yuv_psnr" : yuv_psnr_metric(img1, img2),
+        # "yuv_ssim" : yuv_ssim_metric(img1, img2),
+        "lpips" : lpips_metric(img1, img2),
+        "ms_ssim" : ms_ssim_metric(img1, img2),
+        # "yuv_ms_ssim" : yuv_ms_ssim_metric(img1, img2),
+        # "erqa" : erqa_metric(img1, img2),
+    }
+
+
+def get_important_metrics_example(filler=[]):
+    return {
+        "cossim" : deepcopy(filler),
+        "hamming" : deepcopy(filler),
+        "mse" : deepcopy(filler),
+        "psnr" : deepcopy(filler),
+        "ssim" : deepcopy(filler),
+        "yuv_psnr" : deepcopy(filler),
+        "yuv_ssim" : deepcopy(filler),
+        "lpips" : deepcopy(filler),
+        "ms_ssim" : deepcopy(filler),
+        "yuv_ms_ssim" : deepcopy(filler),
+        "erqa" : deepcopy(filler),
     }
