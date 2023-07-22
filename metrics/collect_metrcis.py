@@ -13,37 +13,20 @@ from pathlib import Path
 #     }
 # }
 
-### example of metric
+# example of metric
 
 # metrics = {
-#     "1.mp4" : {
-#          0 : {
-#              "mse" : 10,
-#              "cosim" : .5,
-#              ...
-#          },
-#          1 : {
-#              "mse" : 10,
-#              "cosim" : .5,
-#              ...
-#          },
+#      0 : {
+#          "mse" : 10,
+#          "cosim" : .5,
 #          ...
-#     }
-#
-#     "2.mp4" : {
-#          0 : {
-#              "mse" : 10,
-#              "cosim" : .5,
-#              ...
-#          },
-#          1 : {
-#              "mse" : 10,
-#              "cosim" : .5,
-#              ...
-#          },
+#      },
+#      1 : {
+#          "mse" : 10,
+#          "cosim" : .5,
 #          ...
-#     },
-#     ...
+#      },
+#      ...
 # }
 
 
