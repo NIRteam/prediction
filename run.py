@@ -94,7 +94,7 @@ def main(args, logger):
 
     metrics_json = {}
 
-    files = os.listdir(input_path)
+    files = sorted(os.listdir(input_path))
 
     for i, name in enumerate(files):
         logger.info(f"processing file {name} {i}/{len(files)}")

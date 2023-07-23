@@ -45,7 +45,7 @@ def getFrames(
         if not video_path.is_dir():
             raise ValueError(f"Path f{video_path} is not a directory nor a video file")
 
-        files = os.listdir(video_path)
+        files = sorted(os.listdir(video_path))
         
         for i in tqdm(range(len(files))):
             yield read_img(video_path / files[i], w, h)
